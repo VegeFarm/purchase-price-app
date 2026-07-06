@@ -357,6 +357,12 @@ def parse_marketbom_statement(html_text: str, source_url: Optional[str] = None) 
         unit = normalize_text(unit_raw)
         quantity = _to_decimal(quantity_raw)
         sum_amount = _to_decimal(_get_field(item, ["sum_amount", "sumAmount", "total_amount", "totalAmount", "amount", "price", "금액", "합계금액"]))
+
+        # 반품/차감 행처럼 수량이 음수인 품목은 매입기록·미등록상품 대상에서 제외한다.
+        # 예: 수량 -9, 금액 -18,000 형태의 공심채 차감 행
+        if quantity < 0:
+            continue
+
         goods.append(StatementGood(name=name, unit=unit, quantity=quantity, sum_amount=sum_amount))
 
     if not goods:
