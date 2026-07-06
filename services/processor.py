@@ -157,6 +157,7 @@ class PurchaseProcessor:
 
         exists, existing_status = self._statement_exists(statement.statement_no)
         if exists:
+            result.status = "실패"
             result.duplicate = f"중복 전표({existing_status})"
             result.message = "전표관리에 이미 있는 전표라 매입기록에 다시 입력하지 않았습니다. 재업로드하려면 전표관리에서 해당 행을 삭제하세요."
             return result
