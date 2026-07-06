@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>채소팜 매입단가 전용 프로그램</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #222; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 50px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .subtitle { margin: 0 0 24px; color: #666; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .card h2 { margin: 0 0 12px; font-size: 18px; }
+    label { display: block; font-weight: 700; margin: 10px 0 6px; }
+    input[type="text"], input[type="date"], input[type="file"] { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; background: #fff; font-size: 15px; }
+    button { border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 800; cursor: pointer; background: #1f2937; color: #fff; margin-top: 12px; }
+    button.secondary { background: #374151; }
+    button.danger { background: #b91c1c; }
+    .hint { color: #6b7280; font-size: 13px; line-height: 1.45; margin-top: 8px; }
+    .result { margin: 0 0 22px; border-radius: 14px; padding: 18px; background: #fff; border: 1px solid #d1d5db; }
+    .result h2 { margin: 0 0 12px; font-size: 20px; }
+    .result ul { margin: 0; padding-left: 20px; line-height: 1.8; }
+    .ok { border-color: #86efac; background: #f0fdf4; }
+    .fail { border-color: #fecaca; background: #fef2f2; }
+    .partial { border-color: #fde68a; background: #fffbeb; }
+    .small { font-size: 13px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>채소팜 매입단가 전용 프로그램</h1>
+    <p class="subtitle">마켓봄 거래명세서 → 매입기록 / 미등록상품 / 전표관리 / 전표상세관리 값 입력 전용</p>
+
+    {% if result %}
+      {% set cls = 'ok' if result.status == '성공' else ('partial' if result.status == '부분성공' else 'fail') %}
+      <section class="result {{ cls }}">
+        <h2>{{ title or '처리 결과' }}</h2>
+        <ul>
+          <li><strong>매입단가 시트 상태:</strong> {{ result.status }}</li>
+          {% if result.statement_no %}<li><strong>전표번호:</strong> {{ result.statement_no }}</li>{% endif %}
+          {% if result.purchase_date %}<li><strong>매입일:</strong> {{ result.purchase_date }}</li>{% endif %}
+          {% if result.total_goods %}<li><strong>거래명세서 품목:</strong> {{ result.total_goods }}개</li>{% endif %}
+          <li><strong>매입기록 입력:</strong> {{ result.inserted_count }}개 상품</li>
+          <li><strong>미등록상품:</strong> {{ result.missing_count }}개</li>
+          {% if result.duplicate %}<li><strong>중복 여부:</strong> {{ result.duplicate }}</li>{% endif %}
+          {% if result.message %}<li><strong>안내:</strong> {{ result.message }}</li>{% endif %}
+          {% if result.details %}
+            <li><strong>상세:</strong> {{ result.details | join(', ') }}</li>
+          {% endif %}
+          {% if result.errors %}
+            <li><strong>오류 내용:</strong> {{ result.errors | join(' / ') }}</li>
+          {% else %}
+            <li><strong>오류 내용:</strong> 없음</li>
+          {% endif %}
+        </ul>
+      </section>
+    {% endif %}
+
+    <section class="grid">
+      <div class="card">
+        <h2>1. 거래명세서 링크 입력</h2>
+        <form method="post" action="{{ url_for('process_url') }}">
+          <label for="statement_url">마켓봄 거래명세서 링크</label>
+          <input id="statement_url" name="statement_url" type="text" placeholder="https://wholesalesales.marketbom.com/statement/...">
+          <button type="submit">링크 처리</button>
+        </form>
+        <p class="hint">링크의 HTML을 가져온 뒤, hidden input name=&quot;statement&quot; 안의 JSON을 HTML 업로드와 동일하게 파싱합니다.</p>
+      </div>
+
+      <div class="card">
+        <h2>2. HTML 파일 업로드</h2>
+        <form method="post" action="{{ url_for('process_upload') }}" enctype="multipart/form-data">
+          <label for="html_file">마켓봄 거래명세서 HTML</label>
+          <input id="html_file" name="html_file" type="file" accept=".html,.htm,text/html">
+          <button type="submit">HTML 처리</button>
+        </form>
+        <p class="hint">goods 배열의 name, unit, quantity, sum_amount를 기준으로 매입량과 매입총액을 계산합니다.</p>
+      </div>
+
+      <div class="card">
+        <h2>3. 미등록상품 재처리</h2>
+        <form method="post" action="{{ url_for('reprocess_missing') }}">
+          <button class="secondary" type="submit">미등록상품 재처리</button>
+        </form>
+        <p class="hint">미등록상품의 처리대기/사유 상태 행을 품목환산표 기준으로 다시 확인하고, 가능하면 매입기록에 입력합니다.</p>
+      </div>
+
+      <div class="card">
+        <h2>4. 상품명 일괄변경</h2>
+        <form method="post" action="{{ url_for('bulk_rename') }}">
+          <button class="secondary" type="submit">상품명 일괄변경 실행</button>
+        </form>
+        <p class="hint">상품명변경 시트의 기존상품명 → 변경상품명 기준으로 매입기록 시트의 상품명만 변경합니다.</p>
+      </div>
+
+      <div class="card">
+        <h2>5. 매입기록 삭제</h2>
+        <form method="post" action="{{ url_for('delete_records') }}">
+          <label for="delete_date">삭제할 매입일</label>
+          <input id="delete_date" name="delete_date" type="date">
+          <label for="delete_product">상품명 선택 또는 입력</label>
+          <input id="delete_product" name="delete_product" type="text" placeholder="비워두면 해당 날짜 전체">
+          <button class="danger" type="submit">삭제 실행</button>
+        </form>
+        <p class="hint">서식과 E:F 수식을 보호하기 위해 매입기록 시트 A:D 값만 비웁니다. 전표관리/전표상세관리는 자동 삭제하지 않습니다.</p>
+      </div>
+    </section>
+
+    <p class="small">이 프로그램은 템플릿의 시트/컬럼을 검증만 하고, 필요한 값 입력·값 삭제 외에는 서식/드롭다운/조건부서식/수식/열 너비/셀 병합을 수정하지 않습니다.</p>
+  </main>
+</body>
+</html>
