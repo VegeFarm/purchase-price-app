@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional
 
@@ -14,6 +15,7 @@ from services.sheets import PurchaseSheetClient, SheetOperationError, TemplateVa
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "purchase-price-local-secret")
+logging.basicConfig(level=logging.INFO)
 
 
 class UserVisibleError(RuntimeError):
@@ -50,6 +52,7 @@ def result_from_error(error: Exception) -> ProcessResult:
 
 
 def handle_exception(exc: Exception) -> ProcessResult:
+    app.logger.exception("purchase-price-app error", exc_info=exc)
     if isinstance(exc, (ConfigError, UserVisibleError, StatementParseError, TemplateValidationError, SheetOperationError)):
         return result_from_error(exc)
     return result_from_error(RuntimeError(f"예상하지 못한 오류가 발생했습니다: {exc}"))
@@ -68,21 +71,6 @@ def process_url():
         statement = parse_marketbom_statement(html, source_url=source_url)
         result = build_processor().process_statement(statement)
     except Exception as exc:  # noqa: BLE001 - 화면에 한글 요약으로 보여준다.
-        result = handle_exception(exc)
-    return render_template("index.html", result=result, title="거래명세서 처리 결과")
-
-
-@app.post("/process-upload")
-def process_upload():
-    try:
-        file = request.files.get("html_file")
-        if not file or not file.filename:
-            raise UserVisibleError("HTML 파일을 선택해주세요.")
-        raw = file.read()
-        html = raw.decode("utf-8", errors="replace")
-        statement = parse_marketbom_statement(html)
-        result = build_processor().process_statement(statement)
-    except Exception as exc:  # noqa: BLE001
         result = handle_exception(exc)
     return render_template("index.html", result=result, title="거래명세서 처리 결과")
 

@@ -24,7 +24,6 @@ REQUIRED_SHEETS: Dict[str, List[str]] = {
     "미등록상품": ["업로드일", "전표번호", "매입일", "원본품명", "단위", "처리상태"],
     "상품명변경": ["기존상품명", "변경상품명"],
     "전표관리": ["전표번호", "매입일", "처리상태"],
-    "전표상세관리": ["전표번호", "매입일", "원본품명", "변환품명", "단위", "처리상태"],
     # 아래 3개는 프로그램이 수정하지 않지만 템플릿 존재 여부를 확인한다.
     "원물단가표": [],
     "설정": [],
@@ -171,12 +170,18 @@ class PurchaseSheetClient:
     def batch_clear_values(self, ranges: Sequence[str]) -> None:
         if not ranges:
             return
-        self._execute(
-            self.service.spreadsheets().values().batchClear(
-                spreadsheetId=self.spreadsheet_id,
-                body={"ranges": list(ranges)},
+        # ranges가 너무 많을 때 한 번에 보내면 요청 본문이 커지거나 응답이 지연될 수 있어
+        # 작은 묶음으로 나눠 처리한다. values.clear 계열이라 서식/수식/드롭다운은 수정하지 않는다.
+        range_list = list(ranges)
+        chunk_size = 200
+        for start in range(0, len(range_list), chunk_size):
+            chunk = range_list[start:start + chunk_size]
+            self._execute(
+                self.service.spreadsheets().values().batchClear(
+                    spreadsheetId=self.spreadsheet_id,
+                    body={"ranges": chunk},
+                )
             )
-        )
 
     def _first_blank_row(self, values: List[List[Any]], width: int, start_row: int = 2) -> int:
         # values는 A1부터 시작한다. 요청대로 지정 컬럼 기준 첫 빈 행을 찾는다.

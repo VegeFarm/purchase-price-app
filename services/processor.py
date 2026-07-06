@@ -161,7 +161,6 @@ class PurchaseProcessor:
         conversion_rows = self.sheet.read_conversion_rows()
         aggregated: Dict[str, Dict[str, Decimal]] = defaultdict(lambda: {"qty": Decimal(0), "amount": Decimal(0)})
         missing_rows: List[List[Any]] = []
-        detail_rows: List[List[Any]] = []
         upload_date = _today_kst()
 
         for good in statement.goods:
@@ -170,24 +169,9 @@ class PurchaseProcessor:
                 converted_qty = good.quantity * match.factor
                 aggregated[match.converted_name]["qty"] += converted_qty
                 aggregated[match.converted_name]["amount"] += good.sum_amount
-                detail_rows.append([
-                    statement.statement_no,
-                    statement.purchase_date,
-                    good.name,
-                    match.converted_name,
-                    good.unit,
-                    "처리완료",
-                ])
             elif match.inactive:
-                # 사용여부가 미사용이면 매입기록/미등록상품에 넣지 않고 상세에만 남긴다.
-                detail_rows.append([
-                    statement.statement_no,
-                    statement.purchase_date,
-                    good.name,
-                    "",
-                    good.unit,
-                    "미사용",
-                ])
+                # 사용여부가 미사용이면 매입기록과 미등록상품에 넣지 않고 건너뜁니다.
+                continue
             else:
                 status = _pending_status(match.reason, good.quantity, good.sum_amount)
                 missing_rows.append([
@@ -195,14 +179,6 @@ class PurchaseProcessor:
                     statement.statement_no,
                     statement.purchase_date,
                     good.name,
-                    good.unit,
-                    status,
-                ])
-                detail_rows.append([
-                    statement.statement_no,
-                    statement.purchase_date,
-                    good.name,
-                    "",
                     good.unit,
                     status,
                 ])
@@ -219,7 +195,6 @@ class PurchaseProcessor:
             self.sheet.prepare_append_range("매입기록", 4, purchase_rows),
             self.sheet.prepare_append_range("미등록상품", 6, missing_rows),
             self.sheet.prepare_append_range("전표관리", 3, management_rows),
-            self.sheet.prepare_append_range("전표상세관리", 6, detail_rows),
         ]:
             if prepared:
                 updates.append(prepared)
@@ -243,7 +218,7 @@ class PurchaseProcessor:
 
         product_key = normalize_for_match(product_name)
         rows = self.sheet.get_values("'매입기록'!A:D", formatted=True)
-        clear_ranges = []
+        matched_row_numbers: List[int] = []
         for idx, row in enumerate(rows[1:], start=2):
             row_date = _normalize_date(row[0] if len(row) > 0 else "")
             row_product = normalize_for_match(row[1] if len(row) > 1 else "")
@@ -251,15 +226,27 @@ class PurchaseProcessor:
                 continue
             if product_key and row_product != product_key:
                 continue
-            # 값만 삭제한다. E:F 수식/서식은 건드리지 않는다.
-            clear_ranges.append(f"'매입기록'!A{idx}:D{idx}")
+            matched_row_numbers.append(idx)
+
+        # 값만 삭제한다. 행 삭제가 아니며, E:F 수식/서식은 건드리지 않는다.
+        # 연속된 행은 하나의 A:D 범위로 묶어 Google Sheets 요청을 최소화한다.
+        clear_ranges: List[str] = []
+        if matched_row_numbers:
+            start = prev = matched_row_numbers[0]
+            for row_no in matched_row_numbers[1:]:
+                if row_no == prev + 1:
+                    prev = row_no
+                    continue
+                clear_ranges.append(f"'매입기록'!A{start}:D{prev}")
+                start = prev = row_no
+            clear_ranges.append(f"'매입기록'!A{start}:D{prev}")
 
         self.sheet.batch_clear_values(clear_ranges)
         return ProcessResult(
             status="성공",
             purchase_date=target_date,
             inserted_count=0,
-            message=f"매입기록 {len(clear_ranges)}행의 A:D 값만 삭제했습니다.",
+            message=f"매입기록 {len(matched_row_numbers)}행의 A:D 값만 삭제했습니다.",
             details=[f"상품명: {product_name or '전체'}"],
         )
 
@@ -313,12 +300,10 @@ class PurchaseProcessor:
         self.sheet.validate_template()
         conversion_rows = self.sheet.read_conversion_rows()
         missing = self.sheet.get_values("'미등록상품'!A:F", formatted=True)
-        detail = self.sheet.get_values("'전표상세관리'!A:F", formatted=True)
         management = self.sheet.get_values("'전표관리'!A:C", formatted=True)
 
         aggregations: Dict[Tuple[str, str], Dict[str, Decimal]] = defaultdict(lambda: {"qty": Decimal(0), "amount": Decimal(0)})
         status_updates: List[Tuple[str, Any]] = []
-        detail_updates: List[Tuple[str, Any]] = []
         errors: List[str] = []
         processed_stmt_nos = set()
         processed_missing_row_numbers = set()
@@ -351,17 +336,6 @@ class PurchaseProcessor:
             processed_missing_row_numbers.add(idx)
             processed_rows += 1
 
-            # 전표상세관리의 같은 전표/원본/단위 행도 처리완료로 갱신한다.
-            for d_idx, d_row in enumerate(detail[1:], start=2):
-                d_stmt = normalize_text(d_row[0] if len(d_row) > 0 else "")
-                d_original = normalize_text(d_row[2] if len(d_row) > 2 else "")
-                d_unit = normalize_text(d_row[4] if len(d_row) > 4 else "")
-                d_status = normalize_text(d_row[5] if len(d_row) > 5 else "")
-                if d_stmt == stmt_no and d_original == original_name and d_unit == unit and d_status != "처리완료":
-                    detail_updates.append((f"'전표상세관리'!D{d_idx}", match.converted_name))
-                    detail_updates.append((f"'전표상세관리'!F{d_idx}", "처리완료"))
-                    break
-
         purchase_rows = [
             [date, product, _sheet_num(data["qty"]), _sheet_num(data["amount"])]
             for (date, product), data in aggregations.items()
@@ -370,7 +344,7 @@ class PurchaseProcessor:
         prepared = self.sheet.prepare_append_range("매입기록", 4, purchase_rows)
         if prepared:
             updates.append(prepared)
-        updates.extend([(rng, [[value]]) for rng, value in status_updates + detail_updates])
+        updates.extend([(rng, [[value]]) for rng, value in status_updates])
 
         # 처리된 전표의 미등록 행이 모두 처리완료가 되었는지 확인해서 전표관리 상태를 갱신한다.
         for stmt_no in processed_stmt_nos:
