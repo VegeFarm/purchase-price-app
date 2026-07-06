@@ -135,11 +135,14 @@ class PurchaseProcessor:
         return ConversionMatch(ok=True, converted_name=row.converted_name, factor=factor)
 
     def _statement_exists(self, statement_no: str) -> Tuple[bool, str]:
+        # 숫자형 전표번호가 시트 서식 때문에 "1,234"처럼 읽히는 경우를 대비해
+        # 콤마를 제거하고 비교한다.
+        target = normalize_cell(statement_no).replace(",", "")
         rows = self.sheet.get_values("'전표관리'!A:C", formatted=True)
         for row in rows[1:]:
-            no = normalize_cell(row[0] if len(row) > 0 else "")
+            no = normalize_cell(row[0] if len(row) > 0 else "").replace(",", "")
             status = normalize_cell(row[2] if len(row) > 2 else "")
-            if no == statement_no:
+            if no and no == target:
                 return True, status or "처리상태 없음"
         return False, ""
 

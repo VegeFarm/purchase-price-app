@@ -183,23 +183,37 @@ class PurchaseSheetClient:
                 )
             )
 
-    def _first_blank_row(self, values: List[List[Any]], width: int, start_row: int = 2) -> int:
-        # values는 A1부터 시작한다. 요청대로 지정 컬럼 기준 첫 빈 행을 찾는다.
-        row_number = start_row
+    def _first_blank_row(self, values: List[List[Any]], width: int, start_row: int = 2, needed_rows: int = 1) -> int:
+        """A:D 기준 첫 빈 행을 찾되, needed_rows만큼 '연속으로' 비어 있는 구간만 사용한다.
+
+        중간에 생긴 빈 구간(삭제로 값만 비운 행)이 needed_rows보다 짧으면
+        그 아래 데이터를 덮어쓰게 되므로, 그런 구간은 건너뛰고
+        충분히 긴 빈 구간 또는 마지막 데이터 아래를 반환한다.
+        """
+        run_start: Optional[int] = None  # 현재 연속 빈 구간의 시작 행 번호(1-based)
+        last_data_row = start_row - 1
         for idx in range(start_row - 1, len(values)):
             row = values[idx]
             relevant = [(row[i] if i < len(row) else "") for i in range(width)]
             if all(is_blank(v) for v in relevant):
-                return idx + 1
-            row_number = idx + 2
-        return row_number
+                if run_start is None:
+                    run_start = idx + 1
+                if (idx + 1) - run_start + 1 >= needed_rows:
+                    return run_start
+            else:
+                run_start = None
+                last_data_row = idx + 1
+        # values 끝까지 이어진 빈 구간은 아래가 전부 빈 행이므로 그대로 사용 가능하다.
+        if run_start is not None:
+            return run_start
+        return max(last_data_row + 1, start_row)
 
     def append_values_to_first_blank(self, sheet_name: str, width: int, rows: List[List[Any]]) -> int:
         if not rows:
             return 0
         end_col = col_to_a1(width)
         existing = self.get_values(f"'{sheet_name}'!A:{end_col}")
-        start_row = self._first_blank_row(existing, width=width, start_row=2)
+        start_row = self._first_blank_row(existing, width=width, start_row=2, needed_rows=len(rows))
         target = f"'{sheet_name}'!A{start_row}:{end_col}{start_row + len(rows) - 1}"
         self.batch_update_values([(target, rows)])
         return len(rows)
@@ -209,7 +223,7 @@ class PurchaseSheetClient:
             return None
         end_col = col_to_a1(width)
         existing = self.get_values(f"'{sheet_name}'!A:{end_col}")
-        start_row = self._first_blank_row(existing, width=width, start_row=2)
+        start_row = self._first_blank_row(existing, width=width, start_row=2, needed_rows=len(rows))
         return (f"'{sheet_name}'!A{start_row}:{end_col}{start_row + len(rows) - 1}", rows)
 
     def read_conversion_rows(self) -> List[ConversionRow]:

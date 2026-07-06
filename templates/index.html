@@ -3,102 +3,244 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>채소팜 매입단가 전용 프로그램</title>
+  <title>채소팜 매입단가</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #222; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 50px; }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    .subtitle { margin: 0 0 24px; color: #666; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-    .card h2 { margin: 0 0 12px; font-size: 18px; }
-    label { display: block; font-weight: 700; margin: 10px 0 6px; }
-    input[type="text"], input[type="date"], input[type="file"] { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; background: #fff; font-size: 15px; }
-    button { border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 800; cursor: pointer; background: #1f2937; color: #fff; margin-top: 12px; }
-    button.secondary { background: #374151; }
-    button.danger { background: #b91c1c; }
-    .hint { color: #6b7280; font-size: 13px; line-height: 1.45; margin-top: 8px; }
-    .result { margin: 0 0 22px; border-radius: 14px; padding: 18px; background: #fff; border: 1px solid #d1d5db; }
-    .result h2 { margin: 0 0 12px; font-size: 20px; }
-    .result ul { margin: 0; padding-left: 20px; line-height: 1.8; }
-    .ok { border-color: #86efac; background: #f0fdf4; }
-    .fail { border-color: #fecaca; background: #fef2f2; }
-    .partial { border-color: #fde68a; background: #fffbeb; }
-    .small { font-size: 13px; color: #6b7280; }
+    :root {
+      --green: #157347;
+      --green-dark: #0e5434;
+      --green-soft: #e7f4ec;
+      --ink: #1b2420;
+      --ink-soft: #5c6b62;
+      --line: #dde5df;
+      --bg: #f2f5f1;
+      --card: #ffffff;
+      --red: #b42318;
+      --red-soft: #fdf1f0;
+      --amber: #9a6700;
+      --amber-soft: #fff7e0;
+      --radius: 14px;
+      --num-font: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 26px 16px 60px; }
+
+    /* 헤더 */
+    header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 9px; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
+    .brand::before { content: ""; width: 11px; height: 11px; border-radius: 3px; background: var(--green); flex: none; }
+    header .sub { color: var(--ink-soft); font-size: 13.5px; }
+
+    /* 카드 공통 */
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+    .card h2 { margin: 0 0 4px; font-size: 15.5px; font-weight: 800; letter-spacing: -0.01em; }
+    .card .desc { margin: 0 0 14px; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+
+    /* 1. 메인 입력 */
+    .primary-card { border: 1.5px solid var(--green); box-shadow: 0 2px 10px rgba(21,115,71,.08); }
+    .url-row { display: flex; gap: 8px; }
+    .url-row input {
+      flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px;
+      padding: 13px 14px; font-size: 15px; background: #fafcfa;
+    }
+    .url-row input:focus { outline: 2px solid var(--green); outline-offset: -1px; background: #fff; }
+    button {
+      border: 0; border-radius: 10px; padding: 13px 20px; font-size: 14.5px;
+      font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap;
+      background: var(--green); color: #fff; transition: background .12s;
+    }
+    button:hover { background: var(--green-dark); }
+    button:disabled { opacity: .55; cursor: default; }
+    button.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+    button.ghost:hover { background: #f6f8f6; }
+    button.danger { background: #fff; color: var(--red); border: 1px solid #f0c6c2; }
+    button.danger:hover { background: var(--red-soft); }
+
+    /* 결과 패널 */
+    .result { margin-top: 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); overflow: hidden; }
+    .result-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+    .result-head .title { font-weight: 800; font-size: 15px; }
+    .badge { font-size: 12.5px; font-weight: 800; padding: 4px 11px; border-radius: 99px; letter-spacing: .01em; }
+    .badge.ok { background: var(--green-soft); color: var(--green-dark); }
+    .badge.partial { background: var(--amber-soft); color: var(--amber); }
+    .badge.fail { background: var(--red-soft); color: var(--red); }
+    .badge.dup { background: #eef1f5; color: #3d4a5c; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    .stat { padding: 14px 20px; border-right: 1px solid var(--line); }
+    .stat:last-child { border-right: 0; }
+    .stat .k { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; margin-bottom: 3px; }
+    .stat .v { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+    .stat .v.num { font-family: var(--num-font); font-size: 17px; }
+    .stat .v .unit { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-left: 2px; }
+    .stat .v.warn { color: var(--amber); }
+    .stat .v.zero { color: var(--ink-soft); font-weight: 600; }
+
+    .result-notes { padding: 12px 20px 16px; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.65; }
+    .result-notes .note { color: var(--ink-soft); }
+    .result-notes ul { margin: 6px 0 0; padding-left: 18px; }
+    .result-notes li { margin: 2px 0; }
+    .result-notes .err li { color: var(--red); }
+
+    /* 관리 기능 */
+    .section-label { margin: 26px 0 10px; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); letter-spacing: .06em; }
+    .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .tools label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin: 10px 0 5px; }
+    .tools input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; font-size: 14px; background: #fafcfa; }
+    .tools input:focus { outline: 2px solid var(--green); outline-offset: -1px; background: #fff; }
+    .tools button { margin-top: 12px; width: 100%; padding: 11px 14px; }
+
+    /* 로딩 오버레이 */
+    #loading {
+      display: none; position: fixed; inset: 0; background: rgba(242,245,241,.82);
+      backdrop-filter: blur(2px); z-index: 50; align-items: center; justify-content: center;
+    }
+    #loading.on { display: flex; }
+    .load-box { display: flex; flex-direction: column; align-items: center; gap: 12px; font-weight: 700; color: var(--ink); }
+    .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3.5px solid var(--green-soft); border-top-color: var(--green); animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+    footer { margin-top: 30px; color: var(--ink-soft); font-size: 12px; line-height: 1.6; }
+    @media (max-width: 560px) {
+      .url-row { flex-direction: column; }
+      .stat { border-right: 0; border-bottom: 1px solid var(--line); }
+      .stat:last-child { border-bottom: 0; }
+    }
   </style>
 </head>
 <body>
+  <div id="loading" aria-hidden="true">
+    <div class="load-box"><div class="spinner"></div><div id="loading-text">처리 중…</div></div>
+  </div>
+
   <main class="wrap">
-    <h1>채소팜 매입단가 전용 프로그램</h1>
-    <p class="subtitle">마켓봄 거래명세서 링크 → 매입기록 / 미등록상품 / 전표관리 값 입력 전용</p>
+    <header>
+      <div class="brand">채소팜 매입단가</div>
+      <div class="sub">마켓봄 거래명세서 → 매입기록 자동 입력</div>
+    </header>
+
+    <section class="card primary-card">
+      <h2>거래명세서 처리</h2>
+      <p class="desc">마켓봄 거래명세서 링크를 붙여넣으면 매입기록·미등록상품·전표관리에 값을 입력합니다.</p>
+      <form method="post" action="{{ url_for('process_url') }}" data-loading="거래명세서를 읽고 구글시트에 입력 중…">
+        <div class="url-row">
+          <input id="source_url" name="source_url" type="url" required
+                 value="{{ source_url or '' }}"
+                 placeholder="https://wholesalesales.marketbom.com/statement/…">
+          <button type="submit">처리 실행</button>
+        </div>
+      </form>
+    </section>
 
     {% if result %}
       {% set cls = 'ok' if result.status == '성공' else ('partial' if result.status == '부분성공' else 'fail') %}
-      <section class="result {{ cls }}">
-        <h2>{{ title or '처리 결과' }}</h2>
-        <ul>
-          <li><strong>매입단가 시트 상태:</strong> {{ result.status }}</li>
-          {% if result.statement_no %}<li><strong>전표번호:</strong> {{ result.statement_no }}</li>{% endif %}
-          {% if result.purchase_date %}<li><strong>매입일:</strong> {{ result.purchase_date }}</li>{% endif %}
-          {% if result.total_goods %}<li><strong>거래명세서 품목:</strong> {{ result.total_goods }}개</li>{% endif %}
-          <li><strong>매입기록 입력:</strong> {{ result.inserted_count }}개 상품</li>
-          <li><strong>미등록상품:</strong> {{ result.missing_count }}개</li>
-          {% if result.duplicate %}<li><strong>중복 여부:</strong> {{ result.duplicate }}</li>{% endif %}
-          {% if result.message %}<li><strong>안내:</strong> {{ result.message }}</li>{% endif %}
+      {% set is_dup = result.duplicate and result.duplicate != '신규 입력' %}
+      <section class="result" id="result">
+        <div class="result-head">
+          <span class="title">{{ title or '처리 결과' }}</span>
+          <span class="badge {{ cls }}">{{ result.status }}</span>
+          {% if is_dup %}<span class="badge dup">{{ result.duplicate }}</span>{% endif %}
+        </div>
+
+        <div class="stats">
+          {% if result.statement_no %}
+          <div class="stat"><div class="k">전표번호</div><div class="v num">{{ result.statement_no }}</div></div>
+          {% endif %}
+          {% if result.purchase_date %}
+          <div class="stat"><div class="k">매입일</div><div class="v num">{{ result.purchase_date }}</div></div>
+          {% endif %}
+          {% if result.total_goods %}
+          <div class="stat"><div class="k">명세서 품목</div><div class="v">{{ result.total_goods }}<span class="unit">개</span></div></div>
+          {% endif %}
+          <div class="stat"><div class="k">매입기록 입력</div>
+            <div class="v {{ 'zero' if not result.inserted_count }}">{{ result.inserted_count }}<span class="unit">건</span></div>
+          </div>
+          <div class="stat"><div class="k">미등록상품</div>
+            <div class="v {{ 'warn' if result.missing_count else 'zero' }}">{{ result.missing_count }}<span class="unit">건</span></div>
+          </div>
+        </div>
+
+        {% if result.message or result.details or result.errors %}
+        <div class="result-notes">
+          {% if result.message %}<div class="note">{{ result.message }}</div>{% endif %}
           {% if result.details %}
-            <li><strong>상세:</strong> {{ result.details | join(', ') }}</li>
+            <ul>{% for d in result.details %}<li>{{ d }}</li>{% endfor %}</ul>
           {% endif %}
           {% if result.errors %}
-            <li><strong>오류 내용:</strong> {{ result.errors | join(' / ') }}</li>
-          {% else %}
-            <li><strong>오류 내용:</strong> 없음</li>
+            <ul class="err">{% for e in result.errors %}<li>{{ e }}</li>{% endfor %}</ul>
           {% endif %}
-        </ul>
+        </div>
+        {% endif %}
       </section>
     {% endif %}
 
-    <section class="grid">
+    <div class="section-label">시트 관리</div>
+    <section class="tools">
       <div class="card">
-        <h2>1. 거래명세서 링크 입력</h2>
-        <form method="post" action="{{ url_for('process_url') }}">
-          <label for="source_url">마켓봄 거래명세서 링크</label>
-          <input id="source_url" name="source_url" type="url" value="{{ source_url or '' }}" placeholder="https://wholesalesales.marketbom.com/statement/...">
-          <button type="submit">링크 처리</button>
+        <h2>미등록상품 재처리</h2>
+        <p class="desc">품목환산표에 새로 등록한 품목이 있으면, 처리대기 상태의 미등록상품을 다시 매입기록에 넣습니다.</p>
+        <form method="post" action="{{ url_for('reprocess_missing') }}" data-loading="미등록상품을 다시 확인하는 중…">
+          <button class="ghost" type="submit">재처리 실행</button>
         </form>
-        <p class="hint">링크의 HTML을 가져온 뒤, hidden input name=&quot;statement&quot; 안의 JSON을 파싱합니다.</p>
-      </div>
-
-
-      <div class="card">
-        <h2>2. 미등록상품 재처리</h2>
-        <form method="post" action="{{ url_for('reprocess_missing') }}">
-          <button class="secondary" type="submit">미등록상품 재처리</button>
-        </form>
-        <p class="hint">미등록상품의 처리대기/사유 상태 행을 품목환산표 기준으로 다시 확인하고, 가능하면 매입기록에 입력합니다.</p>
       </div>
 
       <div class="card">
-        <h2>3. 상품명 일괄변경</h2>
-        <form method="post" action="{{ url_for('bulk_rename') }}">
-          <button class="secondary" type="submit">상품명 일괄변경 실행</button>
+        <h2>상품명 일괄변경</h2>
+        <p class="desc">상품명변경 시트에 적어둔 기존상품명 → 변경상품명 기준으로 매입기록의 상품명을 바꿉니다.</p>
+        <form method="post" action="{{ url_for('bulk_rename') }}" data-loading="상품명을 변경하는 중…">
+          <button class="ghost" type="submit">일괄변경 실행</button>
         </form>
-        <p class="hint">상품명변경 시트의 기존상품명 → 변경상품명 기준으로 매입기록 시트의 상품명만 변경합니다.</p>
       </div>
 
       <div class="card">
-        <h2>4. 매입기록 삭제</h2>
-        <form method="post" action="{{ url_for('delete_records') }}">
-          <label for="delete_date">삭제할 매입일</label>
-          <input id="delete_date" name="delete_date" type="date">
-          <label for="delete_product">상품명 선택 또는 입력</label>
+        <h2>매입기록 삭제</h2>
+        <p class="desc">해당 날짜의 매입기록 값(A:D)만 비웁니다. 상품명을 비우면 그 날짜 전체가 삭제됩니다.</p>
+        <form method="post" action="{{ url_for('delete_records') }}" data-loading="매입기록을 삭제하는 중…" data-confirm-delete>
+          <label for="delete_date">매입일</label>
+          <input id="delete_date" name="delete_date" type="date" required>
+          <label for="delete_product">상품명 (선택)</label>
           <input id="delete_product" name="delete_product" type="text" placeholder="비워두면 해당 날짜 전체">
           <button class="danger" type="submit">삭제 실행</button>
         </form>
-        <p class="hint">서식과 E:F 수식을 보호하기 위해 매입기록 시트 A:D 값만 비웁니다. 전표관리는 자동 삭제하지 않습니다.</p>
       </div>
     </section>
 
-    <p class="small">이 프로그램은 템플릿의 시트/컬럼을 검증만 하고, 필요한 값 입력·값 삭제 외에는 서식/드롭다운/조건부서식/수식/열 너비/셀 병합을 수정하지 않습니다.</p>
+    <footer>
+      이 프로그램은 시트의 값만 입력·삭제하며 서식, 드롭다운, 조건부서식, 수식, 열 너비, 셀 병합은 수정하지 않습니다.
+      전표관리에 있는 전표는 중복 입력되지 않습니다.
+    </footer>
   </main>
+
+  <script>
+    (function () {
+      var loading = document.getElementById('loading');
+      var loadingText = document.getElementById('loading-text');
+      document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          if (form.hasAttribute('data-confirm-delete')) {
+            var date = form.querySelector('[name="delete_date"]').value;
+            var product = form.querySelector('[name="delete_product"]').value.trim();
+            var target = product ? (date + ' / ' + product) : (date + ' 전체');
+            if (!confirm('매입기록에서 다음 항목을 삭제할까요?\n\n' + target)) {
+              e.preventDefault();
+              return;
+            }
+          }
+          loadingText.textContent = form.getAttribute('data-loading') || '처리 중…';
+          loading.classList.add('on');
+          form.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+        });
+      });
+      var result = document.getElementById('result');
+      if (result) { result.scrollIntoView({ block: 'nearest' }); }
+    })();
+  </script>
 </body>
 </html>

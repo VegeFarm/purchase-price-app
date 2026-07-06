@@ -43,7 +43,10 @@ def fetch_html_from_url(url: str) -> str:
         },
     )
     response.raise_for_status()
-    response.encoding = response.encoding or "utf-8"
+    # requests는 charset 미지정 시 encoding을 ISO-8859-1로 잡아 한글이 깨진다.
+    # 그 경우 실제 내용 기반 추정(apparent_encoding)이나 utf-8로 보정한다.
+    if not response.encoding or response.encoding.lower() in ("iso-8859-1", "latin-1"):
+        response.encoding = response.apparent_encoding or "utf-8"
     return response.text
 
 

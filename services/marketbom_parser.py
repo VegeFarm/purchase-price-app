@@ -93,13 +93,18 @@ def _walk(obj: Any) -> Iterable[Any]:
 
 
 def _find_first_by_keys(obj: Any, candidates: List[str]) -> Optional[Any]:
-    normalized = {_normalize_key(k) for k in candidates}
-    for node in _walk(obj):
-        if not isinstance(node, dict):
-            continue
-        for key, value in node.items():
-            if _normalize_key(key) in normalized and value not in (None, ""):
-                return value
+    """candidates를 우선순위 순서대로 찾는다.
+
+    'id', 'no' 같은 범용 키가 statement_no 같은 정확한 키보다
+    먼저 잡히지 않도록, 후보별로 전체 JSON을 순회한다.
+    """
+    nodes = [node for node in _walk(obj) if isinstance(node, dict)]
+    for candidate in candidates:
+        target = _normalize_key(candidate)
+        for node in nodes:
+            for key, value in node.items():
+                if _normalize_key(key) == target and value not in (None, ""):
+                    return value
     return None
 
 
@@ -194,6 +199,95 @@ def _fallback_statement_no_from_url(source_url: Optional[str]) -> Optional[str]:
     return tail or None
 
 
+def _dict_value(obj: Any, key: str) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return None
+
+
+def _extract_marketbom_slip_no(data: Dict[str, Any]) -> str:
+    """마켓봄 실제 전표번호를 우선 추출한다.
+
+    마켓봄 statement JSON에서는 링크 끝값(share_key)이 아니라
+    slip.trade_slip_de_no 값(S202607020007 형태)이 사람이 보는 전표번호다.
+    trade_slip_de_no가 없을 때만 숫자 trade_slip_no를 사용한다.
+    """
+    slip = data.get("slip") if isinstance(data.get("slip"), dict) else {}
+    direct = (
+        _dict_value(slip, "trade_slip_de_no")
+        or _dict_value(slip, "trade_slip_no")
+        or _dict_value(slip, "slip_no")
+        or _dict_value(slip, "slipNo")
+    )
+    text = normalize_text(direct)
+    if text:
+        return text
+
+    no_value = _find_first_by_keys(
+        data,
+        [
+            "trade_slip_de_no",
+            "tradeSlipDeNo",
+            "trade_slip_no",
+            "tradeSlipNo",
+            "statement_no",
+            "statementNo",
+            "statement_number",
+            "statementNumber",
+            "slip_no",
+            "slipNo",
+            "document_no",
+            "documentNo",
+            "전표번호",
+            "거래명세서번호",
+            # 아래 범용 키는 마지막 보조 후보로만 둔다.
+            "number",
+            "no",
+        ],
+    )
+    return normalize_text(no_value) if no_value not in (None, "") else ""
+
+
+def _extract_marketbom_total_amount(data: Dict[str, Any], goods: List[StatementGood]) -> Decimal:
+    """마켓봄 총금액을 amount.total 우선으로 추출한다.
+
+    goods[].sum_amount는 개별 품목 금액이라 전체 총금액으로 쓰면 안 된다.
+    """
+    amount = data.get("amount") if isinstance(data.get("amount"), dict) else {}
+    direct = (
+        _dict_value(amount, "total")
+        or _dict_value(amount, "sold")
+        or _dict_value(amount, "total_amount")
+        or _dict_value(amount, "totalAmount")
+    )
+    if direct not in (None, ""):
+        try:
+            return _to_decimal(direct)
+        except StatementParseError:
+            pass
+
+    total_value = _find_first_by_keys(
+        data,
+        [
+            "statement_total_amount",
+            "statementTotalAmount",
+            "grand_total",
+            "grandTotal",
+            "total_amount",
+            "totalAmount",
+            "total",
+            "총금액",
+            "합계금액",
+        ],
+    )
+    if total_value not in (None, ""):
+        try:
+            return _to_decimal(total_value)
+        except StatementParseError:
+            pass
+    return sum((g.sum_amount for g in goods), Decimal(0))
+
+
 def parse_marketbom_statement(html_text: str, source_url: Optional[str] = None) -> StatementData:
     """Parse MarketBom statement HTML.
 
@@ -230,27 +324,9 @@ def parse_marketbom_statement(html_text: str, source_url: Optional[str] = None) 
     )
     purchase_date = _parse_date(date_value)
 
-    no_value = _find_first_by_keys(
-        data,
-        [
-            "statement_no",
-            "statementNo",
-            "statement_number",
-            "statementNumber",
-            "slip_no",
-            "slipNo",
-            "document_no",
-            "documentNo",
-            "number",
-            "no",
-            "code",
-            "id",
-            "전표번호",
-            "거래명세서번호",
-        ],
-    )
-    statement_no = normalize_text(no_value) if no_value not in (None, "") else ""
+    statement_no = _extract_marketbom_slip_no(data)
     if not statement_no:
+        # 실제 전표번호가 JSON에 없을 때만 마지막 보조값으로 링크 끝 share_key를 사용한다.
         statement_no = _fallback_statement_no_from_url(source_url) or ""
     if not statement_no:
         raise StatementParseError("거래명세서 전표번호를 찾을 수 없습니다.")
@@ -263,29 +339,7 @@ def parse_marketbom_statement(html_text: str, source_url: Optional[str] = None) 
         sum_amount = _to_decimal(_get_field(item, ["sum_amount", "sumAmount", "total_amount", "totalAmount", "amount", "price", "금액", "합계금액"]))
         goods.append(StatementGood(name=name, unit=unit, quantity=quantity, sum_amount=sum_amount))
 
-    total_value = _find_first_by_keys(
-        data,
-        [
-            "total_amount",
-            "totalAmount",
-            "statement_total_amount",
-            "statementTotalAmount",
-            "sum_amount",
-            "sumAmount",
-            "total",
-            "grand_total",
-            "grandTotal",
-            "총금액",
-            "합계금액",
-        ],
-    )
-    if total_value not in (None, ""):
-        try:
-            total_amount = _to_decimal(total_value)
-        except StatementParseError:
-            total_amount = sum((g.sum_amount for g in goods), Decimal(0))
-    else:
-        total_amount = sum((g.sum_amount for g in goods), Decimal(0))
+    total_amount = _extract_marketbom_total_amount(data, goods)
 
     return StatementData(
         statement_no=statement_no,
