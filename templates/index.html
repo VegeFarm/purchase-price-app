@@ -61,8 +61,8 @@
       <div class="card">
         <h2>1. 거래명세서 링크 입력</h2>
         <form method="post" action="{{ url_for('process_url') }}">
-          <label for="statement_url">마켓봄 거래명세서 링크</label>
-          <input id="statement_url" name="statement_url" type="text" placeholder="https://wholesalesales.marketbom.com/statement/...">
+          <label for="source_url">마켓봄 거래명세서 링크</label>
+          <input id="source_url" name="source_url" type="url" value="{{ source_url or '' }}" placeholder="https://wholesalesales.marketbom.com/statement/...">
           <button type="submit">링크 처리</button>
         </form>
         <p class="hint">링크의 HTML을 가져온 뒤, hidden input name=&quot;statement&quot; 안의 JSON을 파싱합니다.</p>

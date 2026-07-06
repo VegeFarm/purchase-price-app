@@ -47,32 +47,55 @@ def fetch_html_from_url(url: str) -> str:
     return response.text
 
 
+def _get_statement_url_from_request() -> str:
+    """화면 input name이 바뀌어도 링크를 안정적으로 받는다."""
+    form_keys = ("source_url", "statement_url", "url", "link")
+    for key in form_keys:
+        value = request.form.get(key, "")
+        if value and value.strip():
+            return value.strip()
+
+    payload = request.get_json(silent=True) or {}
+    if isinstance(payload, dict):
+        for key in form_keys:
+            value = str(payload.get(key, "") or "").strip()
+            if value:
+                return value
+    return ""
+
+
 def result_from_error(error: Exception) -> ProcessResult:
     return ProcessResult(status="실패", errors=[str(error)])
 
 
 def handle_exception(exc: Exception) -> ProcessResult:
-    app.logger.exception("purchase-price-app error", exc_info=exc)
     if isinstance(exc, (ConfigError, UserVisibleError, StatementParseError, TemplateValidationError, SheetOperationError)):
+        app.logger.warning("purchase-price-app user error: %s", exc)
         return result_from_error(exc)
+    app.logger.exception("purchase-price-app unexpected error", exc_info=exc)
     return result_from_error(RuntimeError(f"예상하지 못한 오류가 발생했습니다: {exc}"))
 
 
 @app.get("/")
 def index():
-    return render_template("index.html", result=None)
+    return render_template("index.html", result=None, source_url="")
 
 
 @app.post("/process-url")
 def process_url():
+    source_url = _get_statement_url_from_request()
     try:
-        source_url = request.form.get("statement_url", "")
         html = fetch_html_from_url(source_url)
         statement = parse_marketbom_statement(html, source_url=source_url)
         result = build_processor().process_statement(statement)
     except Exception as exc:  # noqa: BLE001 - 화면에 한글 요약으로 보여준다.
         result = handle_exception(exc)
-    return render_template("index.html", result=result, title="거래명세서 처리 결과")
+    return render_template(
+        "index.html",
+        result=result,
+        title="거래명세서 처리 결과",
+        source_url=source_url,
+    )
 
 
 @app.post("/reprocess-missing")
