@@ -82,6 +82,15 @@ def normalize_for_match(value: Any) -> str:
     return normalize_text(value).casefold()
 
 
+def _is_dash_placeholder(value: Any) -> bool:
+    """마켓봄에서 단위/수량이 '-'로 표시되는 안내성 행은 품목으로 처리하지 않는다."""
+    text = normalize_text(value)
+    if not text:
+        return False
+    # 일반 하이픈(-), en dash(–), em dash(—), 긴 가로줄(―)만 있는 경우를 제외한다.
+    return bool(re.fullmatch(r"[-–—―]+", text))
+
+
 def _walk(obj: Any) -> Iterable[Any]:
     yield obj
     if isinstance(obj, dict):
@@ -334,10 +343,24 @@ def parse_marketbom_statement(html_text: str, source_url: Optional[str] = None) 
     goods: List[StatementGood] = []
     for item in goods_items:
         name = normalize_text(_get_field(item, ["name", "goods_name", "goodsName", "product_name", "productName", "품명", "상품명"]))
-        unit = normalize_text(_get_field(item, ["unit", "unit_name", "unitName", "단위"], required=False))
-        quantity = _to_decimal(_get_field(item, ["quantity", "qty", "count", "amount_count", "수량"]))
+        unit_raw = _get_field(item, ["unit", "unit_name", "unitName", "단위"], required=False)
+        quantity_raw = _get_field(item, ["quantity", "qty", "count", "amount_count", "수량"], required=False)
+
+        # 마켓봄 거래명세서에서 단위 또는 수량이 '-'로 표시되는 행은
+        # 실제 매입 품목이 아닌 안내/구분 행으로 보고 매입기록·미등록상품 대상에서 제외한다.
+        if _is_dash_placeholder(unit_raw) or _is_dash_placeholder(quantity_raw):
+            continue
+
+        if quantity_raw in (None, ""):
+            raise StatementParseError(f"goods 항목에서 필요한 필드를 찾을 수 없습니다: quantity, qty, count, amount_count, 수량")
+
+        unit = normalize_text(unit_raw)
+        quantity = _to_decimal(quantity_raw)
         sum_amount = _to_decimal(_get_field(item, ["sum_amount", "sumAmount", "total_amount", "totalAmount", "amount", "price", "금액", "합계금액"]))
         goods.append(StatementGood(name=name, unit=unit, quantity=quantity, sum_amount=sum_amount))
+
+    if not goods:
+        raise StatementParseError("처리할 수 있는 거래명세서 품목이 없습니다. 단위/수량이 '-'인 행은 제외됩니다.")
 
     total_amount = _extract_marketbom_total_amount(data, goods)
 

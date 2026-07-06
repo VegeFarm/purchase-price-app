@@ -97,7 +97,8 @@ def process_url():
         "index.html",
         result=result,
         title="거래명세서 처리 결과",
-        source_url=source_url,
+        # 처리 후에는 같은 링크가 입력칸에 남지 않도록 비운다.
+        source_url="",
     )
 
 
